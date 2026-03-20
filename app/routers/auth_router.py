@@ -4,13 +4,20 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
 
-from app.schemas import LogoutRequest, RefreshTokenRequest, UserCreate, UserLogin, UserResponse
+from app.schemas import (
+    LogoutRequest,
+    RefreshTokenRequest,
+    TokenResponse,
+    UserCreate,
+    UserLogin,
+    UserResponse,
+)
 
 from app.utils.hashing import hash_password, verify_password
 from app.utils.jwt_handler import create_access_token, create_refresh_token, verify_access_token
 from app.utils.token_blacklist import blacklisted_tokens
  
-router=APIRouter()
+router = APIRouter()
 
 @router.post("/signup",response_model=UserResponse)
 def signup(user:UserCreate,db:Session=Depends(get_db)):
@@ -18,7 +25,7 @@ def signup(user:UserCreate,db:Session=Depends(get_db)):
 
 
     if existing_user:
-        raise HTTPException(status_code=400,detail="User already exists")
+        raise HTTPException(status_code = 400,detail = "User already exists")
 
     hashed=hash_password(user.password)
     new_user=User(
@@ -35,15 +42,15 @@ def signup(user:UserCreate,db:Session=Depends(get_db)):
 
 
 
-@router.post("/login")
+@router.post("/login",response_model=TokenResponse)
 def login(user:UserLogin,db:Session=Depends(get_db)):
     db_user=db.query(User).filter(User.email==user.email).first()
 
     if not db_user:
-        raise HTTPException(status_code=401,detail="Invalid credentials")
+        raise HTTPException(status_code=401,detail= "Invalid credentials")
     
     if not verify_password(user.password,db_user.hashed_password):
-        raise HTTPException(status_code=401,detail="Invalid credentials")
+        raise HTTPException(status_code=401,detail= "Invalid credentials")
     
     access_token=create_access_token(
         data={
@@ -65,15 +72,15 @@ def login(user:UserLogin,db:Session=Depends(get_db)):
 
 
 
-@router.post("/refresh")
+@router.post("/refresh",response_model=TokenResponse)
 def refresh_token(data:RefreshTokenRequest,db:Session=Depends(get_db)):
     payload=verify_access_token(data.refresh_token)
 
     if not payload:
-        raise HTTPException(status_code=401,detail="invalid or expired refresh token")
+        raise HTTPException(status_code=401,detail= "invalid or expired refresh token")
     
     if payload.get("token_type")!="refresh":
-        raise HTTPException(status_code=401,detail="invalid token type")
+        raise HTTPException(status_code=401,detail= "invalid token type")
     
     user_id=payload.get("user_id")
 
@@ -83,7 +90,7 @@ def refresh_token(data:RefreshTokenRequest,db:Session=Depends(get_db)):
     db_user=db.query(User).filter(User.id==user_id).first()
 
     if not db_user:
-        raise HTTPException(status_code=401,detail="User not found")
+        raise HTTPException(status_code=401,detail= "User not found")
     
     new_access_token=create_access_token(
         data={
@@ -95,7 +102,8 @@ def refresh_token(data:RefreshTokenRequest,db:Session=Depends(get_db)):
 
     return {
         "access_token":new_access_token,
-        "token_type":"bearer"
+        "refresh_token":None,
+        "token_type":"bearer",
     }
 
 @router.post("/logout")
@@ -103,10 +111,10 @@ def logout(data:LogoutRequest):
     payload=verify_access_token(data.refresh_token)
 
     if not payload:
-        raise HTTPException(status_code=401,detail="invalid or expired token")
+        raise HTTPException(status_code=401,detail= "invalid or expired token")
     
     if payload.get("token_type")!="refresh":
-        raise HTTPException(status_code=401,detail="invalid token type")
+        raise HTTPException(status_code=401,detail= "invalid token type")
     
     blacklisted_tokens.add(data.refresh_token)
 
