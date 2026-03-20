@@ -1,9 +1,10 @@
-from fastapi import APIRouter,Depends,HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import User
+from app.schemas import UserResponse
 from app.utils.jwt_handler import verify_access_token
 
 oauth2_scheme=OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -28,12 +29,8 @@ def get_current_user(
 
     if not db_user:
         raise HTTPException(status_code=401,detail="User not found")
+    
     return db_user
-
-@router.get("/me")
-
-def read_users_me(current_user:User=Depends(get_current_user)):
-    return current_user
 
 
 def get_current_admin(current_user:User=Depends(get_current_user)):
@@ -41,8 +38,13 @@ def get_current_admin(current_user:User=Depends(get_current_user)):
         raise HTTPException(status_code=403,detail="Access denied")
     return current_user
 
-@router.get("/all")
 
+@router.get("/me",response_model=UserResponse)
+def read_users_me(current_user:User=Depends(get_current_user)):
+    return current_user
+
+
+@router.get("/all",response_model=list[UserResponse])
 def get_all_users(
     current_admin:User=Depends(get_current_admin),
     db:Session=Depends(get_db)
