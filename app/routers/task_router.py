@@ -62,3 +62,23 @@ def update_task(
     db.refresh(db_task)
 
     return db_task
+
+@router.delete("/{task_id}")
+def delete_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    db_task = db.query(Task).filter(Task.id == task_id).first()
+
+    if not db_task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    
+    if db_task.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    db.delete(db_task)
+    db.commit()
+
+    return {"message": "Task deleted successfully"}
