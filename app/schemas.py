@@ -36,3 +36,17 @@ class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str | None = None
     token_type: str = "bearer"
+
+
+class TaskCreate(BaseModel):
+    title: str
+
+class TaskResponse(BaseModel):
+    id: int
+    title: str
+    completed: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+        
