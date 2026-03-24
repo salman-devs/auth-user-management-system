@@ -29,11 +29,16 @@ def create_task(
 
 @router.get("/", response_model=list[TaskResponse])
 def get_tasks(
+    completed: bool | None = None,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    tasks = db.query(Task).filter(Task.user_id == current_user.id).all()
-    return tasks
+    query = db.query(Task).filter(Task.user_id == current_user.id)
+
+    if completed is not None:
+        query = query.filter(Task.completed == completed)
+
+    return query.all()
 
 
 @router.put("/{task_id}", response_model=TaskResponse)
@@ -63,6 +68,7 @@ def update_task(
 
     return db_task
 
+
 @router.delete("/{task_id}")
 def delete_task(
     task_id: int,
@@ -82,4 +88,3 @@ def delete_task(
     db.commit()
 
     return {"message": "Task deleted successfully"}
-    
