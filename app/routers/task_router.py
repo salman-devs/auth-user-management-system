@@ -82,3 +82,4 @@ def delete_task(
     db.commit()
 
     return {"message": "Task deleted successfully"}
+    
