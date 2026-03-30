@@ -53,3 +53,8 @@ class TaskResponse(BaseModel):
 class TaskUpdate(BaseModel):
     title: str | None = None
     completed: bool | None = None
+
+class UserUpdate(BaseModel):
+    name: str | None = None
+    password: str | None = None
+    
