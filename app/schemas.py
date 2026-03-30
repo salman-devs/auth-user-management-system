@@ -58,3 +58,10 @@ class UserUpdate(BaseModel):
     name: str | None = None
     password: str | None = None
     
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+    

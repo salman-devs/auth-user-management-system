@@ -16,6 +16,9 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     role = Column(String(20),default="user")
     created_at = Column(DateTime,default=datetime.utcnow)
+    reset_token = Column(String, nullable=True)
+    reset_token_expiry = Column(DateTime, nullable=True)
+    
 
     tasks=relationship("Task", back_populates="owner", cascade="all, delete")
 
