@@ -23,7 +23,7 @@ from app.utils.jwt_handler import (
 )
 from app.utils.token_blacklist import blacklisted_tokens
 from app.utils.tokens import generate_token
-
+from app.schemas import ResetPasswordRequest
 router = APIRouter()
 
 
@@ -161,3 +161,24 @@ def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db
     print(f"RESET TOKEN: {token}")
 
     return {"message": "Reset link sent"}
+
+@router.post("/reset-password")
+def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.reset_token == request.token).first()
+
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid token")
+
+    if user.reset_token_expiry < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Token expired")
+
+    
+    user.hashed_password = hash_password(request.new_password)
+
+    
+    user.reset_token = None
+    user.reset_token_expiry = None
+
+    db.commit()
+
+    return {"message": "Password reset successful"}
