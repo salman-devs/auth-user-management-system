@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
+from time import time
 
 from app.database import get_db
 from app.models import User
@@ -26,6 +27,19 @@ from app.utils.token_blacklist import blacklisted_tokens
 from app.utils.tokens import generate_token
 
 router = APIRouter()
+
+login_attempts = {}
+
+
+def is_blocked(email: str):
+    attempts = login_attempts.get(email, [])
+    attempts = [t for t in attempts if time() - t < 60]
+
+    if len(attempts) >= 5:
+        return True
+
+    login_attempts[email] = attempts
+    return False
 
 
 @router.post("/signup", response_model=UserResponse)
@@ -68,8 +82,16 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     if not db_user.is_verified:
         raise HTTPException(status_code=403, detail="Please verify your email first")
 
+    if is_blocked(user.email):
+        raise HTTPException(status_code=429, detail="Too many login attempts. Try later.")
+
     if not verify_password(user.password, db_user.hashed_password):
+        attempts = login_attempts.get(user.email, [])
+        attempts.append(time())
+        login_attempts[user.email] = attempts
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    login_attempts.pop(user.email, None)
 
     access_token = create_access_token(
         data={
