@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 
@@ -13,6 +13,7 @@ from app.schemas import (
     UserLogin,
     UserResponse,
     ForgotPasswordRequest,
+    ResetPasswordRequest,
 )
 
 from app.utils.hashing import hash_password, verify_password
@@ -23,9 +24,8 @@ from app.utils.jwt_handler import (
 )
 from app.utils.token_blacklist import blacklisted_tokens
 from app.utils.tokens import generate_token
-from app.schemas import ResetPasswordRequest
-router = APIRouter()
 
+router = APIRouter()
 
 
 @router.post("/signup", response_model=UserResponse)
@@ -36,19 +36,23 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="User already exists")
 
     hashed = hash_password(user.password)
+    token = generate_token()
 
     new_user = User(
         name=user.name,
         email=user.email,
         hashed_password=hashed,
+        verification_token=token,
+        is_verified=False
     )
 
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    return new_user
+    print(f"VERIFY TOKEN: {token}")
 
+    return new_user
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -58,9 +62,11 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     if not db_user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    
     if not db_user.is_active:
         raise HTTPException(status_code=403, detail="Account deactivated")
+
+    if not db_user.is_verified:
+        raise HTTPException(status_code=403, detail="Please verify your email first")
 
     if not verify_password(user.password, db_user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -86,7 +92,6 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     }
 
 
-
 @router.post("/refresh", response_model=TokenResponse)
 def refresh_token(data: RefreshTokenRequest, db: Session = Depends(get_db)):
     payload = verify_access_token(data.refresh_token)
@@ -107,7 +112,6 @@ def refresh_token(data: RefreshTokenRequest, db: Session = Depends(get_db)):
     if not db_user:
         raise HTTPException(status_code=401, detail="User not found")
 
-    
     if not db_user.is_active:
         raise HTTPException(status_code=403, detail="Account deactivated")
 
@@ -126,7 +130,6 @@ def refresh_token(data: RefreshTokenRequest, db: Session = Depends(get_db)):
     }
 
 
-
 @router.post("/logout")
 def logout(data: LogoutRequest):
     payload = verify_access_token(data.refresh_token)
@@ -142,12 +145,10 @@ def logout(data: LogoutRequest):
     return {"message": "Logged out successfully"}
 
 
-
 @router.post("/forgot-password")
 def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == request.email).first()
 
-    
     if not user or not user.is_active:
         return {"message": "If email exists, reset link sent"}
 
@@ -162,6 +163,7 @@ def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db
 
     return {"message": "Reset link sent"}
 
+
 @router.post("/reset-password")
 def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.reset_token == request.token).first()
@@ -169,16 +171,34 @@ def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db))
     if not user:
         raise HTTPException(status_code=400, detail="Invalid token")
 
-    if user.reset_token_expiry < datetime.utcnow():
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account deactivated")
+
+    if not user.reset_token_expiry or user.reset_token_expiry < datetime.utcnow():
         raise HTTPException(status_code=400, detail="Token expired")
 
-    
     user.hashed_password = hash_password(request.new_password)
-
-    
     user.reset_token = None
     user.reset_token_expiry = None
 
     db.commit()
 
     return {"message": "Password reset successful"}
+
+
+@router.post("/verify-email")
+def verify_email(token: str = Query(...), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.verification_token == token).first()
+
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid token")
+
+    if user.is_verified:
+        return {"message": "Email already verified"}
+
+    user.is_verified = True
+    user.verification_token = None
+
+    db.commit()
+
+    return {"message": "Email verified successfully"}

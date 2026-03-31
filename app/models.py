@@ -18,6 +18,9 @@ class User(Base):
     created_at = Column(DateTime,default=datetime.utcnow)
     reset_token = Column(String, nullable=True)
     reset_token_expiry = Column(DateTime, nullable=True)
+    is_verified = Column(Boolean, default=False)
+    verification_token = Column(String, nullable=True)
+    
     
 
     tasks=relationship("Task", back_populates="owner", cascade="all, delete")
