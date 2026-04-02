@@ -21,7 +21,7 @@ from app.utils.hashing import hash_password, verify_password
 from app.utils.jwt_handler import (
     create_access_token,
     create_refresh_token,
-    verify_access_token,
+    verify_access_token,  
 )
 from app.utils.token_blacklist import blacklisted_tokens
 from app.utils.tokens import generate_token
@@ -42,6 +42,7 @@ def is_blocked(email: str):
     return False
 
 
+
 @router.post("/signup", response_model=UserResponse)
 def signup(user: UserCreate, db: Session = Depends(get_db)):
     existing_user = db.query(User).filter(User.email == user.email).first()
@@ -57,7 +58,8 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
         email=user.email,
         hashed_password=hashed,
         verification_token=token,
-        is_verified=False
+        is_verified=False,
+        is_active=True
     )
 
     db.add(new_user)
@@ -67,6 +69,7 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
     print(f"VERIFY TOKEN: {token}")
 
     return new_user
+
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -103,7 +106,8 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
 
     refresh_token = create_refresh_token(
         data={
-            "user_id": db_user.id
+            "user_id": db_user.id,
+            "token_type": "refresh"
         }
     )
 
@@ -114,8 +118,14 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     }
 
 
+
 @router.post("/refresh", response_model=TokenResponse)
 def refresh_token(data: RefreshTokenRequest, db: Session = Depends(get_db)):
+
+    
+    if data.refresh_token in blacklisted_tokens:
+        raise HTTPException(status_code=401, detail="Token blacklisted")
+
     payload = verify_access_token(data.refresh_token)
 
     if not payload:
@@ -137,6 +147,7 @@ def refresh_token(data: RefreshTokenRequest, db: Session = Depends(get_db)):
     if not db_user.is_active:
         raise HTTPException(status_code=403, detail="Account deactivated")
 
+    
     new_access_token = create_access_token(
         data={
             "user_id": db_user.id,
@@ -145,15 +156,24 @@ def refresh_token(data: RefreshTokenRequest, db: Session = Depends(get_db)):
         }
     )
 
+    new_refresh_token = create_refresh_token(
+        data={
+            "user_id": db_user.id,
+            "token_type": "refresh"
+        }
+    )
+
     return {
         "access_token": new_access_token,
-        "refresh_token": None,
+        "refresh_token": new_refresh_token,
         "token_type": "bearer",
     }
 
 
+
 @router.post("/logout")
 def logout(data: LogoutRequest):
+
     payload = verify_access_token(data.refresh_token)
 
     if not payload:
@@ -165,6 +185,7 @@ def logout(data: LogoutRequest):
     blacklisted_tokens.add(data.refresh_token)
 
     return {"message": "Logged out successfully"}
+
 
 
 @router.post("/forgot-password")
@@ -184,6 +205,7 @@ def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db
     print(f"RESET TOKEN: {token}")
 
     return {"message": "Reset link sent"}
+
 
 
 @router.post("/reset-password")
@@ -206,6 +228,7 @@ def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db))
     db.commit()
 
     return {"message": "Password reset successful"}
+
 
 
 @router.post("/verify-email")
