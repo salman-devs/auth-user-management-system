@@ -12,7 +12,7 @@ if not DATABASE_URL:
     raise ValueError("DATABASE_URL is not set in the environment")
 
 
-engine=create_engine(DATABASE_URL)
+engine=create_engine(DATABASE_URL,connect_args={"check_same_thread": False})
 
 SessionLocal=sessionmaker(
     autocommit=False,
